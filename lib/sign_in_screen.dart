@@ -1,8 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:photoapp/app_state.dart';
 import 'package:photoapp/photo_list_screen.dart';
-import 'package:provider/provider.dart';
 
 class SignInScreen extends StatefulWidget {
   @override
@@ -106,9 +104,8 @@ class _SignInScreenState extends State<SignInScreen> {
 
       final String email = _emailController.text;
       final String password = _passwordController.text;
-      // ボタンをタップしたときは context.read() を使う
-      final AppState appState = context.read<AppState>();
-      await appState.signIn(email: email, password: password);
+      await FirebaseAuth.instance
+          .signInWithEmailAndPassword(email: email, password: password);
 
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
@@ -136,13 +133,13 @@ class _SignInScreenState extends State<SignInScreen> {
         return;
       }
 
-      // メールアドレス・パスワードをもとに新規登録する
-      //   - TextEditingControllerから入力フォームの文字列を取得できる
-      //   - 面倒くさいログイン状態を維持するための処理はFirebaseが勝手にやってくれる
+      // メールアドレス・パスワードで新規登録
+      //   TextEditingControllerから入力内容を取得
+      //   Authenticationを使った複雑な処理はライブラリがやってくれる
       final String email = _emailController.text;
       final String password = _passwordController.text;
-      final AppState appState = context.read<AppState>();
-      await appState.signUp(email: email, password: password);
+      await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(email: email, password: password);
 
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(

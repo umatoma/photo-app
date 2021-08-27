@@ -52,12 +52,12 @@ class PhotoRepository {
     await FirebaseStorage.instance.ref().child(photo.imagePath).delete();
   }
 
-  Future<void> toggleFavorite(Photo photo) async {
+  Future<void> updatePhoto(Photo photo) async {
     // お気に入り登録状況のデータを更新
     await FirebaseFirestore.instance
         .collection('users/${user.uid}/photos')
         .doc(photo.id)
-        .update(_photoToMap(photo.toggleIsFavorite()));
+        .update(_photoToMap(photo));
   }
 
   List<Photo> _queryToPhotoList(QuerySnapshot query) {

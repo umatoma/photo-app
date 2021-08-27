@@ -1,9 +1,10 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:photoapp/app_state.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photoapp/photo_list_screen.dart';
+import 'package:photoapp/providers.dart';
 import 'package:photoapp/sign_in_screen.dart';
-import 'package:provider/provider.dart';
 
 void main() async {
   // Flutterの初期化処理を待つ
@@ -15,27 +16,47 @@ void main() async {
   //   - ただし、awaitを使うときは関数にasyncを付ける必要がある
   await Firebase.initializeApp();
 
-  runApp(MyApp());
+  runApp(
+    // Providerで定義したデータを渡せるようにする
+    ProviderScope(
+      child: MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider<AppState>(
-      create: (context) => AppState(),
-      child: MaterialApp(
-        title: 'Photo App',
-        theme: ThemeData(
-          primarySwatch: Colors.blue,
-        ),
-        // ログイン状態に応じて画面を切り替える
-        home: Builder(
-          builder: (context) {
-            final appState = context.watch<AppState>();
-            return appState.user == null ? SignInScreen() : PhotoListScreen();
-          },
-        ),
+    return MaterialApp(
+      title: 'Photo App',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
       ),
+      // Consumerを使うことでもデータを受け取れる
+      home: Consumer(builder: (context, watch, child) {
+        // ユーザー情報を取得
+        final asyncUser = watch(userProvider);
+
+        return asyncUser.when(
+          data: (User? data) {
+            return data == null ? SignInScreen() : PhotoListScreen();
+          },
+          loading: () {
+            return Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(),
+              ),
+            );
+          },
+          error: (e, stackTrace) {
+            return Scaffold(
+              body: Center(
+                child: Text(e.toString()),
+              ),
+            );
+          },
+        );
+      }),
     );
   }
 }

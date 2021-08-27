@@ -1,16 +1,7 @@
-# photoapp
+# 作って学ぶ、FlutterとFirebaseを使ったアプリ開発
 
-A new Flutter project.
+書籍「作って学ぶ、FlutterとFirebaseを使ったアプリ開発」用ソースコード。
 
-## Getting Started
+RiverpodではなくProviderを使っているVer.の場合は、↓を参照してください。
 
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://flutter.dev/docs/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://flutter.dev/docs/cookbook)
-
-For help getting started with Flutter, view our
-[online documentation](https://flutter.dev/docs), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- https://github.com/umatoma/photo-app/tree/6df37d59d4b588590b7f9328ffd931575dead86d

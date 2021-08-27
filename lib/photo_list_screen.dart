@@ -1,16 +1,14 @@
 import 'dart:io';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
-import 'package:photoapp/app_state.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photoapp/photo.dart';
 import 'package:photoapp/photo_repository.dart';
 import 'package:photoapp/photo_view_screen.dart';
+import 'package:photoapp/providers.dart';
 import 'package:photoapp/sign_in_screen.dart';
-import 'package:provider/provider.dart';
 
 class PhotoListScreen extends StatefulWidget {
   @override
@@ -18,34 +16,27 @@ class PhotoListScreen extends StatefulWidget {
 }
 
 class _PhotoListScreenState extends State<PhotoListScreen> {
-  late int _currentIndex;
   late PageController _controller;
 
   @override
   void initState() {
-    // BottomNavigationBarで現在表示している要素を判別するためのもの
-    _currentIndex = 0;
-
-    // PageViewを操作するためのもの
-    //   - ページを切り替える処理などに使う
-    _controller = PageController(initialPage: _currentIndex);
+    _controller = PageController(
+      // Riverpodを使いデータを受け取る
+      initialPage: context.read(photoListIndexProvider).state,
+    );
 
     super.initState();
   }
 
   @override
   Widget build(BuildContext context) {
-    final AppState appState = context.watch<AppState>();
-    final List<Photo> photoList = appState.photoList;
-    final List<Photo> favoritePhotoList = appState.getFavoritePhotoList();
-
     return Scaffold(
       appBar: AppBar(
         title: Text('Photo App'),
         actions: [
           // ログアウト用ボタン
           IconButton(
-            onPressed: () => _onSignOut(context),
+            onPressed: () => _onSignOut(),
             icon: Icon(Icons.exit_to_app),
           ),
         ],
@@ -56,20 +47,54 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
         // ページが切り替わったときの処理
         onPageChanged: (int index) => _onPageChanged(index),
         children: [
-          //「全ての画像」を表示する部分
-          PhotoGridView(
-            // 処理を行う際はモデルを受け渡す
-            photoList: photoList,
-            onTap: (photo) => _onTapPhoto(context, photo),
-            onTapFav: (photo) => _onTapFav(context, photo),
-          ),
+          // 「全ての画像」を表示する部分
+          Consumer(builder: (context, watch, child) {
+            // 画像データ一覧を受け取る
+            final asyncPhotoList = watch(photoListProvider);
+            return asyncPhotoList.when(
+              data: (List<Photo> photoList) {
+                return PhotoGridView(
+                  photoList: photoList,
+                  onTap: (photo) => _onTapPhoto(photo, photoList),
+                  onTapFav: (photo) => _onTapFav(photo),
+                );
+              },
+              loading: () {
+                return Center(
+                  child: CircularProgressIndicator(),
+                );
+              },
+              error: (e, stackTrace) {
+                return Center(
+                  child: Text(e.toString()),
+                );
+              },
+            );
+          }),
           //「お気に入り登録した画像」を表示する部分
-          PhotoGridView(
-            // 処理を行う際はモデルを受け渡す
-            photoList: favoritePhotoList,
-            onTap: (photo) => _onTapFav(context, photo),
-            onTapFav: (photo) => _onTapFav(context, photo),
-          ),
+          Consumer(builder: (context, watch, child) {
+            // 画像データ一覧を受け取る
+            final asyncPhotoList = watch(photoListProvider);
+            return asyncPhotoList.when(
+              data: (List<Photo> photoList) {
+                return PhotoGridView(
+                  photoList: photoList,
+                  onTap: (photo) => _onTapPhoto(photo, photoList),
+                  onTapFav: (photo) => _onTapFav(photo),
+                );
+              },
+              loading: () {
+                return Center(
+                  child: CircularProgressIndicator(),
+                );
+              },
+              error: (e, stackTrace) {
+                return Center(
+                  child: Text(e.toString()),
+                );
+              },
+            );
+          }),
         ],
       ),
       // 画像追加用ボタン
@@ -79,40 +104,42 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
         child: Icon(Icons.add),
       ),
       // フッター部分
-      bottomNavigationBar: BottomNavigationBar(
-        // BottomNavigationBarItemがタップされたときの処理
-        //   フォトがタップされた場合 >> index == 0
-        //   お気に入りがタップされた場合 >> index == 1
-        onTap: (int index) => _onTapBottomNavigationItem(index),
-        // 現在表示されているBottomNavigationBarItemのインデックス
-        //   - 0 >> フォト
-        //   - 1 >> お気に入り
-        currentIndex: _currentIndex,
-        items: [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.image),
-            label: 'フォト',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.favorite),
-            label: 'お気に入り',
-          ),
-        ],
+      bottomNavigationBar: Consumer(
+        builder: (context, watch, child) {
+          // 現在のページを受け取る
+          final photoIndex = watch(photoListIndexProvider).state;
+
+          return BottomNavigationBar(
+            // BottomNavigationBarItemがタップされたときの処理
+            //   フォトがタップされた場合 >> index == 0
+            //   お気に入りがタップされた場合 >> index == 1
+            onTap: (int index) => _onTapBottomNavigationItem(index),
+            // 現在表示されているBottomNavigationBarItemのインデックス
+            //   - 0 >> フォト
+            //   - 1 >> お気に入り
+            currentIndex: photoIndex,
+            items: [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.image),
+                label: 'フォト',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.favorite),
+                label: 'お気に入り',
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Future<void> _onTapFav(BuildContext context, Photo photo) async {
-    final AppState state = context.read<AppState>();
-    await state.toggleFavorite(photo);
-  }
-
-  Future<void> _onSignOut(BuildContext context) async {
-    final AppState appState = context.read<AppState>();
-    await appState.signOut();
+  Future<void> _onSignOut() async {
+    // ログアウト処理
+    await FirebaseAuth.instance.signOut();
 
     // ログアウトに成功したらログイン画面に戻す
-    //   - 現在の画面は一旦不要になるのでpushReplacementを使う
+    //   現在の画面は不要になるのでpushReplacementを使う
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => SignInScreen(),
@@ -121,55 +148,55 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
   }
 
   void _onPageChanged(int index) {
-    // ページが切り替わったらBottomNavigationBarで表示する要素も更新する
-    setState(() {
-      _currentIndex = index;
-    });
+    // ページの値を更新する
+    context.read(photoListIndexProvider).state = index;
   }
 
   void _onTapBottomNavigationItem(int index) {
-    // PageViewで表示しているページを切り替える
     _controller.animateToPage(
-      // ページ番号
-      //   - 0 >> 全ての画像を表示するページ
-      //   - 1 >> お気に入り登録した画像を表示するページ
       index,
-      // ページ切替時のアニメーション時間
       duration: Duration(milliseconds: 300),
-      // アニメーションの動き方
-      //   - この値を変えることで、アニメーションの動きを変えることができる
-      //   - https://api.flutter.dev/flutter/animation/Curves-class.html
       curve: Curves.easeIn,
     );
-    // 表示に必要な値を変更するため、setState()の中で値を代入する
-    //   - setState() の処理が呼ばれるとWidgetが再描画される
-    //   - つまり、変更された値をもとに新しいUIが描画できる
-    setState(() {
-      _currentIndex = index;
-    });
+    // ページの値を更新する
+    context.read(photoListIndexProvider).state = index;
   }
 
-  void _onTapPhoto(BuildContext context, Photo photo) {
-    // 最初に表示する画像のURLを指定して、画像詳細画面に遷移する
+  void _onTapPhoto(Photo photo, List<Photo> photoList) {
+    final initialIndex = photoList.indexOf(photo);
+
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => PhotoViewScreen(photo: photo),
+        // ProviderScopeを使いScopedProviderの値を上書きできる
+        // ここでは、最初に表示する画像の番号を指定
+        builder: (_) => ProviderScope(
+          overrides: [
+            photoViewInitialIndexProvider.overrideWithValue(initialIndex)
+          ],
+          child: PhotoViewScreen(),
+        ),
       ),
     );
   }
 
   Future<void> _onAddPhoto() async {
-    // 画像ファイルを選択
     final FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.image,
     );
 
-    // 画像ファイルが選択された場合
     if (result != null) {
+      // リポジトリ経由でデータを保存する
+      final User user = FirebaseAuth.instance.currentUser!;
+      final PhotoRepository repository = PhotoRepository(user);
       final File file = File(result.files.single.path!);
-      final AppState appState = context.read<AppState>();
-      await appState.addPhoto(file);
+      await repository.addPhoto(file);
     }
+  }
+
+  Future<void> _onTapFav(Photo photo) async {
+    final photoRepository = context.read(photoRepositoryProvider);
+    final toggledPhoto = photo.toggleIsFavorite();
+    await photoRepository!.updatePhoto(toggledPhoto);
   }
 }
 

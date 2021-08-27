@@ -1,43 +1,29 @@
 import 'package:flutter/material.dart';
-import 'package:photoapp/app_state.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photoapp/photo.dart';
-import 'package:provider/provider.dart';
+import 'package:photoapp/providers.dart';
 import 'package:share/share.dart';
 
 class PhotoViewScreen extends StatefulWidget {
-  const PhotoViewScreen({
-    Key? key,
-    required this.photo,
-  }) : super(key: key);
-
-  final Photo photo;
-
   @override
   _PhotoViewScreenState createState() => _PhotoViewScreenState();
 }
 
 class _PhotoViewScreenState extends State<PhotoViewScreen> {
   late PageController _controller;
-  late int _currentPage;
 
   @override
   void initState() {
     super.initState();
 
-    final AppState appState = context.read<AppState>();
-    final int initialPage = appState.photoList.indexOf(widget.photo);
-
     _controller = PageController(
-      initialPage: initialPage,
+      // Riverpodから初期値を受け取り設定
+      initialPage: context.read(photoViewInitialIndexProvider),
     );
-    _currentPage = initialPage;
   }
 
   @override
   Widget build(BuildContext context) {
-    final AppState appState = context.watch<AppState>();
-    final List<Photo> photoList = appState.photoList;
-
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
@@ -46,16 +32,34 @@ class _PhotoViewScreenState extends State<PhotoViewScreen> {
       ),
       body: Stack(
         children: [
-          PageView(
-            controller: _controller,
-            onPageChanged: (int index) => _onPageChanged(index),
-            children: photoList.map((Photo photo) {
-              return Image.network(
-                photo.imageURL,
-                fit: BoxFit.cover,
-              );
-            }).toList(),
-          ),
+          Consumer(builder: (context, watch, child) {
+            final asyncPhotoList = watch(photoListProvider);
+
+            return asyncPhotoList.when(
+              data: (photoList) {
+                return PageView(
+                  controller: _controller,
+                  onPageChanged: (int index) => {},
+                  children: photoList.map((Photo photo) {
+                    return Image.network(
+                      photo.imageURL,
+                      fit: BoxFit.cover,
+                    );
+                  }).toList(),
+                );
+              },
+              loading: () {
+                return Center(
+                  child: CircularProgressIndicator(),
+                );
+              },
+              error: (e, stackTrace) {
+                return Center(
+                  child: Text(e.toString()),
+                );
+              },
+            );
+          }),
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
@@ -75,19 +79,14 @@ class _PhotoViewScreenState extends State<PhotoViewScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   IconButton(
-                    onPressed: () => _onTapShare(context),
+                    onPressed: () => _onTapShare(),
                     color: Colors.white,
                     icon: Icon(Icons.share),
                   ),
                   IconButton(
-                    onPressed: () => _onTapDelete(context),
+                    onPressed: () => _onTapDelete(),
                     color: Colors.white,
                     icon: Icon(Icons.delete),
-                  ),
-                  IconButton(
-                    onPressed: () => _onTapFav(context),
-                    color: Colors.white,
-                    icon: Icon(Icons.favorite_border),
                   ),
                 ],
               ),
@@ -98,16 +97,10 @@ class _PhotoViewScreenState extends State<PhotoViewScreen> {
     );
   }
 
-  void _onPageChanged(int index) {
-    setState(() {
-      _currentPage = index;
-    });
-  }
-
-  Future<void> _onTapDelete(BuildContext context) async {
-    final AppState appState = context.read<AppState>();
-    final List<Photo> photoList = appState.photoList;
-    final Photo photo = photoList[_currentPage];
+  Future<void> _onTapDelete() async {
+    final photoRepository = context.read(photoRepositoryProvider);
+    final photoList = context.read(photoListProvider).data!.value;
+    final photo = photoList[_controller.page!.toInt()];
 
     if (photoList.length == 1) {
       Navigator.of(context).pop();
@@ -118,21 +111,14 @@ class _PhotoViewScreenState extends State<PhotoViewScreen> {
       );
     }
 
-    await appState.deletePhoto(photo);
+    await photoRepository!.deletePhoto(photo);
   }
 
-  Future<void> _onTapFav(BuildContext context) async {
-    final AppState state = context.read<AppState>();
-    final Photo photo = state.photoList[_currentPage];
+  Future<void> _onTapShare() async {
+    final photoList = context.read(photoListProvider).data!.value;
+    final photo = photoList[_controller.page!.toInt()];
 
-    await state.toggleFavorite(photo);
-  }
-
-  Future<void> _onTapShare(BuildContext context) async {
-    final AppState state = context.read<AppState>();
-    final Photo photo = state.photoList[_currentPage];
-
-    // 画像のURLを共有する
+    // 画像URLを共有
     await Share.share(photo.imageURL);
   }
 }
